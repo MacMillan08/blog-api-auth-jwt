@@ -1,0 +1,97 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  member
+  moderator
+  admin
+}
+
+model Category {
+  id         Int       @id @default(autoincrement())
+  name       String    @unique
+  created_at DateTime  @default(now())
+  deleted_at DateTime?
+  posts      Post[]
+}
+
+model Tag {
+  id         Int       @id @default(autoincrement())
+  name       String    @unique
+  created_at DateTime  @default(now())
+  postTags   PostTag[]
+}
+
+model Post {
+  id         Int      @id @default(autoincrement())
+  title      String
+  content    String
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  deleted_at   DateTime?
+  published_at DateTime?
+
+  user_id Int
+  user    User @relation(fields: [user_id], references: [id])
+
+  category_id Int
+  category    Category @relation(fields: [category_id], references: [id])
+
+  comments Comment[]
+  postTags PostTag[]
+}
+
+model Comment {
+  id         Int      @id @default(autoincrement())
+  content    String
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  post_id Int
+  post    Post @relation(fields: [post_id], references: [id])
+
+  user_id Int
+  user    User @relation(fields: [user_id], references: [id])
+}
+
+model PostTag {
+  post_id Int
+  post    Post @relation(fields: [post_id], references: [id])
+
+  tag_id Int
+  tag    Tag @relation(fields: [tag_id], references: [id])
+
+  @@id([post_id, tag_id])
+}
+
+model User {
+  id              Int       @id @default(autoincrement())
+  name            String
+  username        String    @unique
+  hashed_password String
+  role            UserRole  @default(member)
+  created_at      DateTime  @default(now())
+  deleted_at      DateTime?
+
+  posts         Post[]
+  comments      Comment[]
+  refreshTokens RefreshToken[]
+}
+
+model RefreshToken {
+  id         Int       @id @default(autoincrement())
+  user_id    Int
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+  expires_at DateTime
+  revoked_at DateTime?
+
+  user User @relation(fields: [user_id], references: [id])
+}
