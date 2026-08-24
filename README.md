@@ -19,9 +19,11 @@ The two are signed with **separate secrets** (`JWT_ACCESS_SECRET` / `JWT_REFRESH
 
 ## Authorization
 
-Authentication answers *who are you*; this layer answers *is this yours*. Write operations check ownership before touching a row — an author can edit or delete their own post and their own comments, and nobody else's. Role checks are layered on top for administrative actions.
+Authentication answers *who are you*; this layer answers *is this yours*. Before a post is updated or deleted, the controller loads the record and compares `post.user_id` against the authenticated user. If they differ and the user has no moderator or admin role, the request is rejected with a 403 rather than silently doing nothing.
 
-The check happens in the service layer against the record actually loaded from the database, not against an ID passed in by the client. A user cannot edit someone else's post by sending a different `authorId` in the body.
+The comparison is made against the row **loaded from the database**, never against an id sent in the request body — so a user cannot edit someone else's post by supplying a different `user_id`. Moderators and admins bypass the ownership check but still have to pass authentication.
+
+Deletes are soft: `remove` sets `deleted_at` instead of dropping the row, and every read filters on `deleted_at: null`. A post that gets deleted by mistake is recoverable, and comments that referenced it do not end up pointing at nothing.
 
 ## Resources
 
@@ -63,7 +65,7 @@ Secrets are never committed. `.env.example` documents the required keys; real va
 src/
 ├── routes/        # postRoutes, categoryRoutes, TagRoutes, commentRoutes
 ├── controllers/   # Auth, User, Post, Category, Tag, PostTag, Comment
-├── services/      # business logic and ownership checks
+├── services/      # Prisma queries and business logic
 ├── middleware/    # AuthMiddleware — JWT verification
 ├── utils/         # Prisma client singleton
 └── types/
@@ -71,6 +73,16 @@ prisma/
 ├── schema.prisma
 └── migrations/
 ```
+
+## Notes
+
+Three things I would change:
+
+- The ownership checks live in the controllers. They work, but every controller repeats the same load-then-compare block, so a new endpoint can forget it and nothing will complain. Moving the check into the service — or into a middleware that takes the resource type — would make it structural instead of a habit. This is the pattern I used in my NestJS e-commerce project, where a guard resolves a permission key per endpoint.
+- Refresh tokens are not stored, so they cannot be revoked on logout. A valid refresh token stays valid until it expires. Persisting a hash of it would fix that.
+- There are no automated tests. The ownership rules are exactly the kind of logic that is easy to break in a refactor and hard to notice by hand.
+
+Built as part of an 8-month backend development program.
 
 ## Notes
 
